@@ -1,0 +1,5 @@
+setup.py
+mystocks.egg-info/PKG-INFO
+mystocks.egg-info/SOURCES.txt
+mystocks.egg-info/dependency_links.txt
+mystocks.egg-info/top_level.txt
