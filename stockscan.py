@@ -1,35 +1,46 @@
+
 import yfinance as yf
-import pandas as pd
 import matplotlib.pyplot as plt
-import pytz
+import pandas as pd
 
-# Parameters
 symbol = "NVDA"
-timezone = "US/Central"
-date = pd.Timestamp.now(tz=timezone).strftime('%Y-%m-%d')  # Today
 
-# Download 1-minute intraday data
-data = yf.download(tickers=symbol, period="1d", interval="1m", prepost=True)
+# Download 2 days of 1-minute data
+data = yf.download(tickers=symbol, period="2d", interval="1m", prepost=True)
 
-# Convert to CDT and extract the hour
-data.index = data.index.tz_localize('UTC').tz_convert(timezone)
-data['Hour'] = data.index.hour
-data['Minute'] = data.index.minute
-data['TimeStr'] = data.index.strftime('%H:%M')
+# Drop MultiIndex (ticker level)
+data.columns = data.columns.droplevel(1)
 
-# Filter for pre-market (e.g., 3 AM–8:30 AM CDT)
-premarket = data.between_time("03:00", "08:29")
+# Convert index to America/Chicago (CDT)
+if data.index.tz is None:
+    data.index = data.index.tz_localize("UTC").tz_convert("America/Chicago")
+else:
+    data.index = data.index.tz_convert("America/Chicago")
 
-# Group by hour
-hourly_volume = premarket.groupby(premarket.index.hour)['Volume'].sum()
+# Split data into separate days
+data["Date"] = data.index.date
+dates = sorted(data["Date"].unique())
+if len(dates) < 2:
+    print("Not enough days of data for gap analysis.")
+    exit()
+
+yesterday = dates[-2]
+today = dates[-1]
+
+# Extract last value from yesterday and first from today
+yesterday_close = data[data["Date"] == yesterday]["Close"].between_time("14:59", "15:00").iloc[-1]
+today_open = data[data["Date"] == today]["Close"].between_time("08:30", "08:31").iloc[0]
+gap = today_open - yesterday_close
 
 # Plot
-plt.figure(figsize=(10, 5))
-hourly_volume.plot(kind='bar')
-plt.title(f'NVDA Pre-Market Volume by Hour (CDT) – {date}')
-plt.xlabel("Hour (CDT)")
-plt.ylabel("Total Volume")
-plt.xticks(rotation=0)
+plt.figure(figsize=(12, 6))
+plt.plot(data.index, data["Close"], label=f"{symbol} Close Price", color="blue")
+plt.axhline(y=yesterday_close, color="red", linestyle="--", label=f"Yesterday Close ({yesterday_close:.2f})")
+plt.axhline(y=today_open, color="green", linestyle="--", label=f"Today Open ({today_open:.2f})")
+plt.title(f"{symbol} Price with Overnight Gap: {gap:.2f}")
+plt.xlabel("Time (CDT)")
+plt.ylabel("Price")
 plt.grid(True)
+plt.legend()
 plt.tight_layout()
 plt.show()
